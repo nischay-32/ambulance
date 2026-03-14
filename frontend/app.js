@@ -677,7 +677,32 @@ document.getElementById("dispatch-btn").addEventListener("click", () => {
     setBtnState("dispatching");
 });
 
+// ─── Dynamic Config & Google Maps Loader ──────────────────────────────────────
+async function loadGoogleMaps() {
+    try {
+        const response = await fetch('http://localhost:8000/api/config');
+        const config = await response.json();
+        const apiKey = config.google_maps_api_key;
+
+        if (!apiKey || apiKey === "YOUR_API_KEY_HERE") {
+            console.error("Invalid Google Maps API Key. Please check your .env file.");
+            alert("API Key missing! Please configure backend/.env");
+            return;
+        }
+
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&v=weekly&libraries=geometry&callback=initMap`;
+        script.async = true;
+        script.defer = true;
+        document.head.appendChild(script);
+        console.log("Google Maps script injected dynamically.");
+    } catch (error) {
+        console.error("Failed to fetch config or load Google Maps:", error);
+    }
+}
+
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 window.initMap = initMap;
+loadGoogleMaps(); // Start the dynamic loading process
 connectWebSocket();
-setBtnState("disabled");
+setBtnState("disabled");

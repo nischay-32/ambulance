@@ -1,8 +1,13 @@
-
 import sys
-sys.path.append('c:/emergency/backend')
 import os
-os.environ['GOOGLE_MAPS_API_KEY'] = 'AIzaSyBm52PmFkbHGAL2TrVJwbmeU_nx7J5OBYY'
+from dotenv import load_dotenv
+
+# Ensure backend directory is in path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.append(current_dir)
+
+load_dotenv(os.path.join(current_dir, '.env'))
 from routing_engine import RoutingEngine
 re = RoutingEngine()
 hosp = re.get_nearest_hospital({'lat': 12.9716, 'lng': 77.5946})

@@ -28,6 +28,12 @@ routing_engine = RoutingEngine()
 def read_root():
     return {"status": "Dynamic Green Corridor System Backend is running"}
 
+@app.get("/api/config")
+def get_config():
+    return {
+        "google_maps_api_key": os.getenv("GOOGLE_MAPS_API_KEY")
+    }
+
 _hospitals_cache = None
 
 @app.get("/api/hospitals")

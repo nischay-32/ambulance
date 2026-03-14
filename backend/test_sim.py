@@ -1,6 +1,12 @@
 import asyncio, sys, os, json
-sys.path.append('c:/emergency/backend')
-os.environ['GOOGLE_MAPS_API_KEY'] = 'AIzaSyBm52PmFkbHGAL2TrVJwbmeU_nx7J5OBYY'
+from dotenv import load_dotenv
+
+# Ensure backend directory is in path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.append(current_dir)
+
+load_dotenv(os.path.join(current_dir, '.env'))
 from routing_engine import RoutingEngine
 from signal_controller import SignalController
 from simulation import Simulator
@@ -26,7 +32,7 @@ async def run_test():
     
     sim = Simulator(points2)
     steps_count = 0
-    async def step(p):
+    async def step(p, idx):
         nonlocal steps_count
         steps_count += 1
         if steps_count == 1: print('Sim 2 Started Movement')
