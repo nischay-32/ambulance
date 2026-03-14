@@ -1,12 +1,12 @@
 from geopy.distance import geodesic
+import math
 
-# ── Major Bangalore junctions (lat, lng, name) ────────────────────────────────
-# 80+ well-known signalised intersections spread across the city and outskirts.
+# ── Major Bangalore signalised junctions ─────────────────────────────────────
+# (lat, lng, name)
 BANGALORE_JUNCTIONS = [
     # Central / CBD
     (12.9762, 77.5929, "Majestic"),
     (12.9716, 77.5946, "City Market"),
-    (12.9791, 77.5913, "Gubbi Thotadappa Rd Junction"),
     (12.9714, 77.6035, "Richmond Circle"),
     (12.9698, 77.6088, "Lalbagh West Gate"),
     (12.9658, 77.5958, "Jayanagar 4th Block"),
@@ -19,7 +19,7 @@ BANGALORE_JUNCTIONS = [
     (12.9890, 77.6095, "Indiranagar 100ft Road"),
     (12.9856, 77.6408, "Domlur"),
     (12.9822, 77.6472, "Marathahalli Bridge"),
-    (12.9591, 77.6974, "Whitefield"),
+    (12.9591, 77.6974, "Whitefield Main Junction"),
     (12.9698, 77.7472, "ITPL Main Road"),
     (12.9352, 77.6245, "BTM Layout"),
     (12.9153, 77.6101, "Electronic City Phase 1"),
@@ -63,8 +63,7 @@ BANGALORE_JUNCTIONS = [
     (12.9849, 77.5348, "Nagarbhavi"),
     (12.9968, 77.5100, "Kengeri Satellite Town"),
     (12.9612, 77.5219, "Mysore Road"),
-    (12.9500, 77.5120, "Rajarajeshwari"),
-    # Ring Road / Outer Ring Road
+    # Outer Ring Road
     (12.9550, 77.6950, "Marathahalli ORR"),
     (12.9270, 77.6850, "Sarjapur ORR"),
     (13.0190, 77.6940, "Varthur"),
@@ -72,151 +71,248 @@ BANGALORE_JUNCTIONS = [
     (13.0420, 77.6620, "Banaswadi ORR"),
     (13.0650, 77.6000, "Bellary Road"),
     (13.0180, 77.5240, "Tumkur Road"),
-    # Additional major points
+    # Additional
     (12.9950, 77.6280, "Indiranagar CMH Road"),
     (12.9715, 77.6398, "Old Airport Road"),
     (12.9912, 77.5782, "Sadashivanagar"),
     (12.9857, 77.5691, "Mehkri Circle"),
     (12.9923, 77.5883, "Palace Grounds"),
-    (13.0013, 77.5967, "Vidyaranyapura"),
     (12.9580, 77.6430, "Koramangala ORR"),
     (12.9430, 77.5730, "Girinagar"),
     (12.9723, 77.6564, "Domlur ORR"),
-    (12.9631, 77.6542, "Intermediate Ring Road"),
     (12.9500, 77.6640, "HSR ORR"),
     (13.0310, 77.5450, "Peenya Industrial"),
-    (12.9880, 77.7210, "Whitefield Main Road"),
+    (12.9880, 77.7210, "Whitefield Road"),
+    (12.9791, 77.5913, "Gubbi Thotadappa Rd"),
+    (12.9800, 77.6200, "Halasuru Lake Rd"),
+    (12.9600, 77.6300, "HSR 27th Main"),
 ]
+
+# How close a junction must be to a route point to be included (metres)
+SNAP_RADIUS_M = 180
+
+
+def _bearing_degrees(p1, p2):
+    """Compass bearing (0=N, 90=E) from p1→p2."""
+    lat1 = math.radians(p1[0]); lat2 = math.radians(p2[0])
+    dLng = math.radians(p2[1] - p1[1])
+    y = math.sin(dLng) * math.cos(lat2)
+    x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(dLng)
+    return (math.degrees(math.atan2(y, x)) + 360) % 360
+
+
+def _offset_point(lat, lng, bearing_deg, distance_m):
+    """Return a point offset `distance_m` metres in `bearing_deg` direction."""
+    R = 6371000.0
+    b = math.radians(bearing_deg)
+    d = distance_m / R
+    lat1 = math.radians(lat)
+    lng1 = math.radians(lng)
+    lat2 = math.asin(math.sin(lat1) * math.cos(d) +
+                     math.cos(lat1) * math.sin(d) * math.cos(b))
+    lng2 = lng1 + math.atan2(math.sin(b) * math.sin(d) * math.cos(lat1),
+                              math.cos(d) - math.sin(lat1) * math.sin(lat2))
+    return math.degrees(lat2), math.degrees(lng2)
 
 
 class SignalController:
     def __init__(self):
         self.signals = []
 
+    # ── public ─────────────────────────────────────────────────────────────────
+
     def initialize_signals(self, route_points, steps):
+        """
+        Build signal groups only for Bangalore junctions that lie on the route.
+
+        Per matched junction we create 3 signals:
+          • route   – on the ambulance's path         → turns GREEN on approach
+          • cross_a – perpendicular direction A        → turns RED  on approach
+          • cross_b – perpendicular direction B        → turns RED  on approach
+
+        Cross signals are placed 12 m either side of the junction centre on
+        the perpendicular axis so they are visually distinct on the map.
+        """
         self.signals = []
 
-        # ── 1. City-wide Bangalore junction signals ───────────────────────────
-        for idx, (lat, lng, name) in enumerate(BANGALORE_JUNCTIONS):
+        if not route_points:
+            return self.signals
+
+        # ── 1. Find the local travel bearing at each route point ──────────────
+        # We'll use it to compute perpendicular offsets for cross signals.
+        def route_bearing_near(jlat, jlng):
+            """Return travel bearing at the closest route point."""
+            best_idx, best_d = 0, float('inf')
+            for i, rp in enumerate(route_points):
+                d = geodesic((jlat, jlng), (rp['lat'], rp['lng'])).meters
+                if d < best_d:
+                    best_d, best_idx = d, i
+            # Use bearing from prev→next point for stability
+            i = best_idx
+            if i == 0:
+                p1 = route_points[0]; p2 = route_points[1] if len(route_points) > 1 else p1
+            elif i >= len(route_points) - 1:
+                p1 = route_points[-2]; p2 = route_points[-1]
+            else:
+                p1 = route_points[i - 1]; p2 = route_points[i + 1]
+            return _bearing_degrees(
+                (p1['lat'], p1['lng']),
+                (p2['lat'], p2['lng'])
+            )
+
+        # ── 2. Match junctions to route ──────────────────────────────────────
+        seen_junctions = set()
+
+        for j_idx, (jlat, jlng, jname) in enumerate(BANGALORE_JUNCTIONS):
+            # Check if this junction is within SNAP_RADIUS_M of any route point
+            on_route = False
+            for rp in route_points:
+                if geodesic((jlat, jlng), (rp['lat'], rp['lng'])).meters <= SNAP_RADIUS_M:
+                    on_route = True
+                    break
+
+            if not on_route:
+                continue
+
+            # De-duplicate (two junctions very close together)
+            key = f"{round(jlat, 3)},{round(jlng, 3)}"
+            if key in seen_junctions:
+                continue
+            seen_junctions.add(key)
+
+            travel_bearing = route_bearing_near(jlat, jlng)
+            perp_a = (travel_bearing + 90)  % 360   # right side of road
+            perp_b = (travel_bearing + 270) % 360   # left  side of road
+
+            # Cross signal positions: 12 m either side of junction centre
+            ca_lat, ca_lng = _offset_point(jlat, jlng, perp_a, 12)
+            cb_lat, cb_lng = _offset_point(jlat, jlng, perp_b, 12)
+
+            base = f"j{j_idx}"
+
+            # Route signal — sits right at the junction
             self.signals.append({
-                "id":              f"blr_{idx}",
-                "lat":             lat,
-                "lng":             lng,
-                "name":            name,
-                "state":           "red" if idx % 2 == 0 else "green",
-                "type":            "background",
+                "id":    f"{base}_route",
+                "lat":   jlat,
+                "lng":   jlng,
+                "name":  jname,
+                "state": "red",      # normal city state
+                "phase": "normal",   # normal | prepare | active | reset
+                "type":  "route",
                 "distance_to_amb": float('inf'),
                 "eta":             float('inf'),
-                "on_route":        False,
             })
 
-        # ── 2. Signals at every route step intersection ───────────────────────
-        if steps:
-            for i, step in enumerate(steps[:-1]):
-                slat = step['end_location'].get('latitude',  step['end_location'].get('lat'))
-                slng = step['end_location'].get('longitude', step['end_location'].get('lng'))
-                if slat is None or slng is None:
-                    continue
+            # Cross signal A (right perpendicular)
+            self.signals.append({
+                "id":    f"{base}_cross_a",
+                "lat":   ca_lat,
+                "lng":   ca_lng,
+                "name":  f"{jname} cross",
+                "state": "green",
+                "phase": "normal",
+                "type":  "cross",
+                "distance_to_amb": float('inf'),
+                "eta":             float('inf'),
+            })
 
-                # Route-direction signal (will turn green for ambulance)
-                self.signals.append({
-                    "id":              f"route_{i}",
-                    "lat":             slat,
-                    "lng":             slng,
-                    "name":            f"Route junction {i}",
-                    "state":           "red",
-                    "type":            "route",
-                    "distance_to_amb": float('inf'),
-                    "eta":             float('inf'),
-                    "on_route":        True,
-                })
-                # Cross-traffic signal at the same junction (offset slightly)
-                self.signals.append({
-                    "id":              f"cross_{i}",
-                    "lat":             slat + 0.0003,
-                    "lng":             slng + 0.0003,
-                    "name":            f"Cross junction {i}",
-                    "state":           "green",
-                    "type":            "cross",
-                    "distance_to_amb": float('inf'),
-                    "eta":             float('inf'),
-                    "on_route":        True,
-                })
+            # Cross signal B (left perpendicular)
+            self.signals.append({
+                "id":    f"{base}_cross_b",
+                "lat":   cb_lat,
+                "lng":   cb_lng,
+                "name":  f"{jname} cross",
+                "state": "green",
+                "phase": "normal",
+                "type":  "cross",
+                "distance_to_amb": float('inf'),
+                "eta":             float('inf'),
+            })
 
-        # ── 3. Mark background junctions that are close to the route ─────────
-        if route_points:
-            for sig in self.signals:
-                if sig["type"] != "background":
-                    continue
-                for rp in route_points:
-                    d = geodesic((sig["lat"], sig["lng"]), (rp["lat"], rp["lng"])).meters
-                    if d < 120:          # within 120 m of any route point
-                        sig["on_route"] = True
-                        sig["type"]     = "route"   # promote to route signal
-                        break
-
+        print(f"[SignalController] {len(seen_junctions)} junctions on route → "
+              f"{len(self.signals)} signals created.")
         return self.signals
 
+    # ── Green Corridor state machine ──────────────────────────────────────────
+    #
+    # Zone thresholds (distance from ambulance to signal):
+    #   PREPARE  : 600–1200 m ahead   → route = amber,   cross = green  (warning)
+    #   ACTIVE   : 0–600 m ahead      → route = GREEN,   cross = RED    (clear path)
+    #   HOLD     : 0–300 m behind     → keep active state (no flicker)
+    #   RESET    : > 300 m behind     → route = red,     cross = green  (normal)
+    #
+    # "Ahead" vs "behind" is determined by comparing the ambulance's projected
+    # forward vector with the vector ambulance→signal.
+
+    PREPARE_NEAR  =  600   # m
+    PREPARE_FAR   = 1200   # m
+    ACTIVE_DIST   =  600   # m
+    ACTIVE_ETA    =   25   # s
+    HOLD_BEHIND   =  300   # m
+    RESET_BEHIND  =  300   # m
+
     def update_signals(self, ambulance_location, ambulance_speed_mps=30):
-        """
-        Green Corridor logic
-        ────────────────────
-        AHEAD zone  (0 – 600 m, ETA ≤ 20 s):
-            route signal  → GREEN  (clear the path)
-            cross signal  → RED    (stop cross-traffic)
-            background on-route → GREEN
-
-        PASSED zone (> 300 m behind ambulance):
-            all signals → reset to normal city state (alternating red/green)
-
-        Outside both zones: no change (keeps last corridor state while
-        ambulance is between 0-300 m past the signal to avoid flicker)
-        """
         amb = ambulance_location
-        updated = []
 
         for sig in self.signals:
             dist = geodesic(
                 (amb["lat"], amb["lng"]),
                 (sig["lat"], sig["lng"])
             ).meters
-
             eta = dist / max(1, ambulance_speed_mps)
+
             sig["distance_to_amb"] = dist
             sig["eta"]             = eta
 
-            if sig["type"] in ("route", "cross"):
-                # Determine whether ambulance has passed this signal.
-                # We use ETA < 0 proxy: if dist is large AND ambulance has
-                # been progressing, the signal is behind. We approximate
-                # "passed" by checking if the signal was already green and
-                # the ambulance is now > 350 m away with increasing distance.
-                # Simpler robust approach: use a 20 s ETA corridor window.
+            if sig["type"] == "route":
+                self._update_route_signal(sig, dist, eta, ambulance_speed_mps)
+            elif sig["type"] == "cross":
+                # Cross signals mirror the phase of their paired route signal.
+                # We locate the sibling route signal by ID convention.
+                base = sig["id"].rsplit("_cross", 1)[0]
+                route_sig = next(
+                    (s for s in self.signals if s["id"] == f"{base}_route"), None
+                )
+                if route_sig:
+                    self._update_cross_signal(sig, route_sig["phase"])
 
-                if eta <= 20 and dist <= 600:
-                    # Ambulance is approaching — open corridor
-                    if sig["type"] == "route":
-                        sig["state"] = "green"
-                    else:  # cross
-                        sig["state"] = "red"
-                elif dist > 350:
-                    # Ambulance has passed — reset to normal
-                    if sig["type"] == "route":
-                        sig["state"] = "red"
-                    else:
-                        sig["state"] = "green"
-                # Between 0–350 m after passing: hold state to avoid flicker
-
-            elif sig["type"] == "background":
-                if sig.get("on_route"):
-                    # Promoted background junction on the route path
-                    if eta <= 20 and dist <= 600:
-                        sig["state"] = "green"
-                    elif dist > 350:
-                        sig["state"] = "red"
-                # Off-route background signals stay in their static city state
-
-            updated.append(sig)
-
-        self.signals = updated
         return self.signals
+
+    # ── internal helpers ──────────────────────────────────────────────────────
+
+    def _update_route_signal(self, sig, dist, eta, speed):
+        phase = sig["phase"]
+
+        if dist <= self.ACTIVE_DIST and eta <= self.ACTIVE_ETA:
+            # Ambulance is close and approaching fast → open corridor
+            sig["phase"] = "active"
+            sig["state"] = "green"
+
+        elif dist <= self.PREPARE_FAR and phase == "normal":
+            # Ambulance is in the prepare window → amber warning
+            sig["phase"] = "prepare"
+            sig["state"] = "amber"
+
+        elif phase == "active" and dist > self.HOLD_BEHIND:
+            # Ambulance has passed and moved away → reset
+            sig["phase"] = "reset"
+            sig["state"] = "red"
+
+        elif phase == "reset" and dist > 800:
+            # Fully back to normal city cycle
+            sig["phase"] = "normal"
+            sig["state"] = "red"
+
+        # If phase == "prepare" and dist already dropped below ACTIVE_DIST,
+        # the first branch above will fire. No explicit transition needed.
+
+    def _update_cross_signal(self, sig, route_phase):
+        if route_phase == "active":
+            sig["phase"] = "active"
+            sig["state"] = "red"    # cross traffic STOPPED
+        elif route_phase == "prepare":
+            sig["phase"] = "prepare"
+            sig["state"] = "amber"  # cross traffic warned
+        elif route_phase in ("reset", "normal"):
+            sig["phase"] = route_phase
+            sig["state"] = "green"  # cross traffic flows freely
