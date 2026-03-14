@@ -314,6 +314,7 @@ async def simulation_endpoint(websocket: WebSocket):
                     except Exception:
                         pass
 
+                simulator = Simulator(points1)
                 await simulator.run(on_simulation_step)
 
                 # ── Pause at incident ─────────────────────────────────────────

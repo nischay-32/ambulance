@@ -13,7 +13,7 @@ yarn-error.log*
 # Environment
 .env
 .env.test
-
+.env.local
 # Build/Coverage
 dist
 build/
