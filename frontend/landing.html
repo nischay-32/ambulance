@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Green Wave — Dynamic Emergency Corridor System</title>
+    <meta name="description" content="AI-powered ambulance routing that clears green corridors in real-time, saving lives every second.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0a0a;
+            --surface: rgba(20,20,20,0.85);
+            --border: rgba(255,255,255,0.07);
+            --green: #00c853;
+            --green-dim: rgba(0,200,83,0.15);
+            --green-glow: rgba(0,200,83,0.35);
+            --red: #ff4444;
+            --text: #f0f0f0;
+            --muted: #888;
+            --font: 'Inter', sans-serif;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--font);
+            overflow-x: hidden;
+        }
+
+        /* ── Animated grid background ── */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(0,200,83,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,200,83,0.03) 1px, transparent 1px);
+            background-size: 60px 60px;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        /* ── NAV ── */
+        nav {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 100;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 18px 60px;
+            background: rgba(10,10,10,0.75);
+            backdrop-filter: blur(18px);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.2rem;
+            font-weight: 800;
+            color: var(--green);
+            letter-spacing: -0.5px;
+            text-decoration: none;
+        }
+
+        .logo-icon {
+            width: 34px; height: 34px;
+            background: var(--green);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 36px;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--muted);
+            text-decoration: none;
+            font-size: 0.88rem;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover { color: var(--text); }
+
+        .nav-cta {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .btn-ghost {
+            padding: 8px 20px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: transparent;
+            color: var(--text);
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            transition: border-color 0.2s, background 0.2s;
+        }
+
+        .btn-ghost:hover {
+            border-color: rgba(255,255,255,0.25);
+            background: rgba(255,255,255,0.05);
+        }
+
+        .btn-primary {
+            padding: 9px 22px;
+            background: var(--green);
+            color: #000;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            cursor: pointer;
+            text-decoration: none;
+            transition: box-shadow 0.2s, transform 0.15s;
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 0 20px var(--green-glow);
+            transform: translateY(-1px);
+        }
+
+        /* ── HERO ── */
+        .hero {
+            position: relative;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 140px 40px 80px;
+            z-index: 1;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 16px;
+            background: var(--green-dim);
+            border: 1px solid rgba(0,200,83,0.3);
+            border-radius: 100px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--green);
+            margin-bottom: 28px;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-dot {
+            width: 6px; height: 6px;
+            background: var(--green);
+            border-radius: 50%;
+            animation: pulse-dot 1.5s infinite;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.7); }
+        }
+
+        .hero h1 {
+            font-size: clamp(2.8rem, 6vw, 5.5rem);
+            font-weight: 900;
+            line-height: 1.05;
+            letter-spacing: -2px;
+            max-width: 860px;
+            margin-bottom: 24px;
+        }
+
+        .hero h1 .highlight {
+            background: linear-gradient(135deg, #00c853, #69f0ae);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero p {
+            font-size: 1.1rem;
+            color: var(--muted);
+            max-width: 560px;
+            line-height: 1.7;
+            margin-bottom: 42px;
+        }
+
+        .hero-actions {
+            display: flex;
+            gap: 14px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 70px;
+        }
+
+        .btn-large {
+            padding: 14px 32px;
+            font-size: 0.95rem;
+            border-radius: 10px;
+        }
+
+        /* ── Animated corridor visualizer ── */
+        .corridor-demo {
+            position: relative;
+            width: min(700px, 92vw);
+            height: 200px;
+            background: rgba(15,15,15,0.9);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            overflow: hidden;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 0 60px rgba(0,200,83,0.08), 0 20px 60px rgba(0,0,0,0.5);
+        }
+
+        .road {
+            position: absolute;
+            top: 50%;
+            left: 0; right: 0;
+            height: 60px;
+            transform: translateY(-50%);
+            background: #1a1a1a;
+            border-top: 2px solid #2a2a2a;
+            border-bottom: 2px solid #2a2a2a;
+        }
+
+        .road-dash {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            height: 3px;
+            width: 40px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 2px;
+            animation: dash-move 1.8s linear infinite;
+        }
+
+        .road-dash:nth-child(1) { left: -10%; animation-delay: 0s; }
+        .road-dash:nth-child(2) { left: 16%; animation-delay: -0.6s; }
+        .road-dash:nth-child(3) { left: 42%; animation-delay: -1.2s; }
+        .road-dash:nth-child(4) { left: 68%; animation-delay: -0.3s; }
+        .road-dash:nth-child(5) { left: 88%; animation-delay: -0.9s; }
+
+        @keyframes dash-move {
+            from { transform: translateY(-50%) translateX(0); }
+            to   { transform: translateY(-50%) translateX(-200px); }
+        }
+
+        .ambulance {
+            position: absolute;
+            top: 50%;
+            left: -80px;
+            transform: translateY(-50%);
+            width: 70px; height: 40px;
+            background: linear-gradient(90deg, #cc0000, #ff2222);
+            border-radius: 6px 10px 6px 6px;
+            animation: amb-drive 4s ease-in-out infinite;
+            box-shadow: 0 0 20px rgba(255,50,50,0.7), 0 0 40px rgba(255,50,50,0.3);
+        }
+
+        .ambulance::before {
+            content: '🚑';
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+        }
+
+        .ambulance::after {
+            content: '';
+            position: absolute;
+            left: 100%; top: 50%;
+            transform: translateY(-50%);
+            width: 120px; height: 2px;
+            background: linear-gradient(90deg, rgba(0,200,83,0.8), transparent);
+            animation: corridor-beam 4s ease-in-out infinite;
+        }
+
+        @keyframes amb-drive {
+            0%   { left: -80px; }
+            80%  { left: calc(100% + 80px); }
+            100% { left: calc(100% + 80px); }
+        }
+
+        @keyframes corridor-beam {
+            0%   { opacity: 0; }
+            20%  { opacity: 1; }
+            80%  { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        /* Traffic lights */
+        .signal {
+            position: absolute;
+            top: 20%;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            align-items: center;
+        }
+
+        .signal-post {
+            width: 4px;
+            height: 30px;
+            background: #333;
+        }
+
+        .signal-box {
+            width: 16px;
+            height: 40px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-around;
+            padding: 3px;
+        }
+
+        .signal-light {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+        }
+
+        .sig-r { background: var(--red); box-shadow: 0 0 6px var(--red); }
+        .sig-y { background: #888; }
+        .sig-g { background: #888; }
+
+        .signal.green-active .sig-r { background: #333; box-shadow: none; }
+        .signal.green-active .sig-g { background: var(--green); box-shadow: 0 0 8px var(--green); }
+
+        .signal:nth-child(3) { left: 20%; }
+        .signal:nth-child(4) { left: 42%; }
+        .signal:nth-child(5) { left: 65%; }
+        .signal:nth-child(6) { left: 85%; }
+
+        .corridor-label {
+            position: absolute;
+            top: 12px; left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.7rem;
+            color: var(--green);
+            font-weight: 600;
+            letter-spacing: 2px;
+            opacity: 0.7;
+        }
+
+        /* ── STATS ── */
+        .stats-section {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            justify-content: center;
+            gap: 0;
+            padding: 0 40px 80px;
+        }
+
+        .stat-card {
+            flex: 1;
+            max-width: 220px;
+            padding: 32px 28px;
+            text-align: center;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            backdrop-filter: blur(12px);
+        }
+
+        .stat-card:first-child { border-radius: 16px 0 0 16px; }
+        .stat-card:last-child  { border-radius: 0 16px 16px 0; }
+        .stat-card + .stat-card { border-left: none; }
+
+        .stat-value {
+            font-size: 2.4rem;
+            font-weight: 900;
+            color: var(--green);
+            line-height: 1;
+            margin-bottom: 6px;
+        }
+
+        .stat-label {
+            font-size: 0.78rem;
+            color: var(--muted);
+            font-weight: 500;
+        }
+
+        /* ── FEATURES ── */
+        .features-section {
+            position: relative;
+            z-index: 1;
+            padding: 60px 60px 100px;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        .section-label {
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 3px;
+            color: var(--green);
+            text-transform: uppercase;
+            margin-bottom: 14px;
+        }
+
+        .section-title {
+            font-size: clamp(1.8rem, 3vw, 2.6rem);
+            font-weight: 800;
+            letter-spacing: -1px;
+            margin-bottom: 14px;
+            line-height: 1.15;
+        }
+
+        .section-subtitle {
+            font-size: 0.95rem;
+            color: var(--muted);
+            max-width: 480px;
+            line-height: 1.7;
+            margin-bottom: 56px;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .feature-card {
+            padding: 32px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            backdrop-filter: blur(8px);
+            transition: border-color 0.3s, transform 0.3s, box-shadow 0.3s;
+            cursor: default;
+        }
+
+        .feature-card:hover {
+            border-color: rgba(0,200,83,0.3);
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.4), 0 0 0 1px rgba(0,200,83,0.1);
+        }
+
+        .feature-icon {
+            width: 48px; height: 48px;
+            background: var(--green-dim);
+            border: 1px solid rgba(0,200,83,0.25);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            margin-bottom: 20px;
+        }
+
+        .feature-card h3 {
+            font-size: 1.05rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            letter-spacing: -0.3px;
+        }
+
+        .feature-card p {
+            font-size: 0.85rem;
+            color: var(--muted);
+            line-height: 1.65;
+        }
+
+        /* ── HOW IT WORKS ── */
+        .how-section {
+            position: relative;
+            z-index: 1;
+            padding: 60px 60px 100px;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        .steps-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0;
+            position: relative;
+        }
+
+        .steps-grid::before {
+            content: '';
+            position: absolute;
+            top: 24px;
+            left: 12%;
+            right: 12%;
+            height: 2px;
+            background: linear-gradient(90deg, var(--green) 0%, rgba(0,200,83,0.1) 100%);
+            z-index: 0;
+        }
+
+        .step {
+            padding: 0 20px;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .step-number {
+            width: 48px; height: 48px;
+            background: var(--green);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            font-weight: 800;
+            color: #000;
+            margin: 0 auto 20px;
+            box-shadow: 0 0 20px var(--green-glow);
+        }
+
+        .step h4 {
+            font-size: 0.95rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .step p {
+            font-size: 0.8rem;
+            color: var(--muted);
+            line-height: 1.6;
+        }
+
+        /* ── CTA ── */
+        .cta-section {
+            position: relative;
+            z-index: 1;
+            margin: 0 60px 100px;
+            padding: 60px;
+            background: linear-gradient(135deg, rgba(0,200,83,0.12), rgba(0,200,83,0.04));
+            border: 1px solid rgba(0,200,83,0.25);
+            border-radius: 24px;
+            text-align: center;
+            backdrop-filter: blur(12px);
+        }
+
+        .cta-section h2 {
+            font-size: clamp(1.8rem, 3vw, 2.4rem);
+            font-weight: 800;
+            letter-spacing: -1px;
+            margin-bottom: 14px;
+        }
+
+        .cta-section p {
+            color: var(--muted);
+            font-size: 0.95rem;
+            margin-bottom: 36px;
+        }
+
+        /* ── FOOTER ── */
+        footer {
+            position: relative;
+            z-index: 1;
+            border-top: 1px solid var(--border);
+            padding: 24px 60px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        footer p {
+            font-size: 0.8rem;
+            color: var(--muted);
+        }
+
+        .footer-logo {
+            font-size: 0.95rem;
+            font-weight: 800;
+            color: var(--green);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- NAV -->
+    <nav>
+        <a href="landing.html" class="nav-logo">
+            <div class="logo-icon">🌿</div>
+            Green Wave
+        </a>
+        <ul class="nav-links">
+            <li><a href="#features">Features</a></li>
+            <li><a href="#how-it-works">How it works</a></li>
+            <li><a href="#about">About</a></li>
+        </ul>
+        <div class="nav-cta">
+            <a href="login.html" class="btn-ghost">Sign in</a>
+            <a href="login.html" class="btn-primary">Launch Dashboard →</a>
+        </div>
+    </nav>
+
+    <!-- HERO -->
+    <section class="hero">
+        <div class="hero-badge">
+            <span class="badge-dot"></span>
+            Live AI Dispatch Active — Bangalore Metro
+        </div>
+        <h1>Every Second Is a<br><span class="highlight">Life Saved</span></h1>
+        <p>Green Wave dynamically clears traffic signals in real-time, routing ambulances through living green corridors — powered by AI and live fleet coordination.</p>
+        <div class="hero-actions">
+            <a href="login.html" class="btn-primary btn-large">Open Dispatch Console →</a>
+            <a href="#how-it-works" class="btn-ghost btn-large">See How It Works</a>
+        </div>
+
+        <!-- Animated corridor demo -->
+        <div class="corridor-demo">
+            <div class="corridor-label">LIVE GREEN CORRIDOR</div>
+            <div class="road">
+                <div class="road-dash"></div>
+                <div class="road-dash"></div>
+                <div class="road-dash"></div>
+                <div class="road-dash"></div>
+                <div class="road-dash"></div>
+            </div>
+            <!-- Signals -->
+            <div class="signal green-active">
+                <div class="signal-box">
+                    <div class="signal-light sig-r"></div>
+                    <div class="signal-light sig-y"></div>
+                    <div class="signal-light sig-g"></div>
+                </div>
+                <div class="signal-post"></div>
+            </div>
+            <div class="signal green-active">
+                <div class="signal-box">
+                    <div class="signal-light sig-r"></div>
+                    <div class="signal-light sig-y"></div>
+                    <div class="signal-light sig-g"></div>
+                </div>
+                <div class="signal-post"></div>
+            </div>
+            <div class="signal green-active">
+                <div class="signal-box">
+                    <div class="signal-light sig-r"></div>
+                    <div class="signal-light sig-y"></div>
+                    <div class="signal-light sig-g"></div>
+                </div>
+                <div class="signal-post"></div>
+            </div>
+            <div class="signal green-active">
+                <div class="signal-box">
+                    <div class="signal-light sig-r"></div>
+                    <div class="signal-light sig-y"></div>
+                    <div class="signal-light sig-g"></div>
+                </div>
+                <div class="signal-post"></div>
+            </div>
+            <!-- Ambulance -->
+            <div class="ambulance"></div>
+        </div>
+    </section>
+
+    <!-- STATS -->
+    <div class="stats-section">
+        <div class="stat-card">
+            <div class="stat-value">2.3m</div>
+            <div class="stat-label">Average time saved per dispatch</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">100+</div>
+            <div class="stat-label">Ambulances in live fleet</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">34%</div>
+            <div class="stat-label">Survival rate improvement</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">&lt;1s</div>
+            <div class="stat-label">Signal preemption latency</div>
+        </div>
+    </div>
+
+    <!-- FEATURES -->
+    <section class="features-section" id="features">
+        <div class="section-label">Core Capabilities</div>
+        <h2 class="section-title">Intelligence built for<br>emergency response</h2>
+        <p class="section-subtitle">Green Wave combines real-time routing, AI decision-making, and signal control into a unified emergency dispatch platform.</p>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">🛣️</div>
+                <h3>Dynamic Green Corridor</h3>
+                <p>Traffic lights ahead of the ambulance turn green autonomously, creating a continuous clear path through city intersections.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🤖</div>
+                <h3>AI Route Optimization</h3>
+                <p>Real-time ML models evaluate road conditions, traffic density, and fleet positions to calculate the optimal route in milliseconds.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🏥</div>
+                <h3>Nearest Hospital Matching</h3>
+                <p>Automatically identifies the closest emergency-capable hospital and precomputes the full two-leg route before dispatch.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">📡</div>
+                <h3>Real-Time Fleet Tracking</h3>
+                <p>100+ ambulances tracked live on the map with status updates, ensuring the closest available unit is always dispatched first.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">⚡</div>
+                <h3>WebSocket Simulation</h3>
+                <p>Sub-second position updates streamed via WebSocket give dispatchers full situational awareness of every active mission.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">📊</div>
+                <h3>Impact Analytics</h3>
+                <p>Live survival probability scores and time-saved metrics empower dispatchers with data-driven decision support.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- HOW IT WORKS -->
+    <section class="how-section" id="how-it-works">
+        <div class="section-label">Workflow</div>
+        <h2 class="section-title">From incident to arrival<br>in four steps</h2>
+        <p class="section-subtitle">Seamless coordination from the moment an emergency is logged to patient handoff.</p>
+        <div class="steps-grid">
+            <div class="step">
+                <div class="step-number">1</div>
+                <h4>Log Incident</h4>
+                <p>Dispatcher clicks map location and selects incident type.</p>
+            </div>
+            <div class="step">
+                <div class="step-number">2</div>
+                <h4>AI Dispatch</h4>
+                <p>Nearest ambulance is identified and route computed instantly.</p>
+            </div>
+            <div class="step">
+                <div class="step-number">3</div>
+                <h4>Green Corridor</h4>
+                <p>Traffic signals ahead clear in real-time as the ambulance moves.</p>
+            </div>
+            <div class="step">
+                <div class="step-number">4</div>
+                <h4>Hospital Handoff</h4>
+                <p>Patient delivered to the nearest emergency facility with full audit log.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="cta-section" id="about">
+        <h2>Ready to Deploy Green Wave?</h2>
+        <p>Sign in to access the live dispatch dashboard and start saving lives today.</p>
+        <a href="login.html" class="btn-primary btn-large">Get Started →</a>
+    </section>
+
+    <!-- FOOTER -->
+    <footer>
+        <div class="footer-logo">🌿 Green Wave</div>
+        <p>Built for the Hackathon · Dynamic Emergency Corridor System</p>
+        <p>© 2026 Green Wave. Powered by AI.</p>
+    </footer>
+
+</body>
+</html>

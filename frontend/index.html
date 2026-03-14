@@ -4,6 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dynamic Green Corridor Dashboard</title>
+    <!-- Auth guard: redirect to landing if not logged in -->
+    <script>
+        if (!sessionStorage.getItem('gw_user')) {
+            window.location.replace('landing.html');
+        }
+    </script>
     <link rel="stylesheet" href="style.css">
     <style>
         /* Ambulance pulse animation used by updateAmbulance() */
@@ -48,9 +54,19 @@
 </head>
 <body>
     <div id="dashboard-container">
-        <header>
-            <h1>Dynamic Green Corridor Dispatch</h1>
-            <p>Agent Console: Incident Logging &amp; Fleet Routing</p>
+        <header style="display:flex; align-items:center; justify-content:space-between; padding: 12px 20px;">
+            <div style="text-align:center; flex:1;">
+                <h1 style="font-size:1.5rem; color:var(--accent-color); letter-spacing:1px;">Dynamic Green Corridor Dispatch</h1>
+                <p style="font-size:0.8rem; color:#a0a0a0; margin-top:3px;">Agent Console: Incident Logging &amp; Fleet Routing</p>
+            </div>
+            <a href="landing.html" onclick="sessionStorage.removeItem('gw_user')" title="Sign out"
+               style="font-size:0.75rem; color:#666; text-decoration:none; padding:5px 12px;
+                      border:1px solid rgba(255,255,255,0.1); border-radius:6px;
+                      transition:color 0.2s, border-color 0.2s; white-space:nowrap;"
+               onmouseover="this.style.color='#ccc'; this.style.borderColor='rgba(255,255,255,0.3)'"
+               onmouseout="this.style.color='#666'; this.style.borderColor='rgba(255,255,255,0.1)'">
+                ⬅ Sign out
+            </a>
         </header>
 
         <div id="controls-panel">
