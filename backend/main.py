@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from routing_engine import RoutingEngine
 from signal_controller import SignalController
 from simulation import Simulator
+from simulation.engine import engine
 
 load_dotenv()
 
@@ -37,6 +38,61 @@ def get_all_hospitals():
         _hospitals_cache = routing_engine.get_all_hospitals()
         print(f"Cached {len(_hospitals_cache)} hospitals.")
     return {"hospitals": _hospitals_cache}
+
+# ── New Simulation Engine Routes ─────────────────────────────────────────────
+
+@app.get("/api/signals")
+def get_signals():
+    return engine.get_signals()
+
+
+@app.get("/api/metrics")
+def get_metrics():
+    snap = engine.snapshot()
+    return {
+        "eta":        snap["eta"],
+        "time_saved": snap["time_saved"],
+        "progress":   snap["progress"],
+        "arrived":    snap["arrived"],
+        "step":       snap["step"],
+    }
+
+@app.post("/api/simulation/start")
+def start_simulation():
+    engine.running = True
+    return {"status": "started"}
+
+
+@app.post("/api/simulation/pause")
+def pause_simulation():
+    engine.pause()
+    return {"status": "paused"}
+
+
+@app.post("/api/simulation/reset")
+def reset_simulation():
+    engine.reset()
+    return {"status": "reset"}
+
+
+@app.get("/api/simulation/state")
+def get_simulation_state():
+    return engine.snapshot()
+
+
+@app.websocket("/ws/live")
+async def websocket_live(ws: WebSocket):
+    await ws.accept()
+    try:
+        while True:
+            if engine.running and not engine.paused:
+                engine.tick()
+            await ws.send_json(engine.snapshot())
+            await asyncio.sleep(0.11)
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
 
 @app.get("/api/preview-route")
 def get_preview_route(incident_lat: float, incident_lng: float):
@@ -225,12 +281,22 @@ async def simulation_endpoint(websocket: WebSocket):
                     "signals":     signals1
                 }))
 
-                simulator        = Simulator(points1)
+                engine.set_route(points1, steps1)
                 dispatched_amb_id = closest_amb['id']
 
+                # We still keep the old simulation loop for compatibility or 
+                # we can let the new /ws/live take over. 
+                # For now, let's keep this one running as it was, 
+                # but ALSO update the engine.
+                
                 async def on_simulation_step(current_pos, point_index):
                     updated_signals = signal_controller.update_signals(
                         current_pos, ambulance_speed_mps=30)
+                    # Sync with engine
+                    engine.current_position = current_pos
+                    engine.current_index = point_index
+                    engine.signals = updated_signals
+                    
                     try:
                         await websocket.send_text(json.dumps({
                             "type":               "SIMULATION_UPDATE",
@@ -279,6 +345,7 @@ async def simulation_endpoint(websocket: WebSocket):
                     "signals":     signals2
                 }))
 
+                engine.set_route(points2, steps2)
                 simulator = Simulator(points2)
                 await simulator.run(on_simulation_step)
 

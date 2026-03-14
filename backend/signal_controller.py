@@ -90,9 +90,9 @@ BANGALORE_JUNCTIONS = [
 # Junction snap radius — increased to 400m to reliably catch nearby junctions
 SNAP_RADIUS_M = 400
 
-# Minimum number of signals to guarantee on any route
-# (evenly spaced along the decoded polyline when junction matching is sparse)
-MIN_SIGNALS = 5
+# Range of signals to guarantee on any route
+MIN_SIGNALS = 2
+MAX_SIGNALS = 5
 
 
 def _bearing_degrees(p1, p2):
@@ -235,7 +235,12 @@ class SignalController:
                 for k, rp in enumerate(usable[::step][:MIN_SIGNALS]):
                     add_group(rp['lat'], rp['lng'], f"Junction {k + 1}")
 
-        print(f"[SignalController] {len(seen_coords)} junctions → {len(self.signals)} signals")
+        # ── Trim to MAX_SIGNALS if necessary ─────────────────────────────────────
+        if len(self.signals) > MAX_SIGNALS * 3: # 3 signals per group
+            # Keep only the first MAX_SIGNALS groups
+            self.signals = self.signals[:MAX_SIGNALS * 3]
+
+        print(f"[SignalController] {len(self.signals)//3} junctions → {len(self.signals)} signals")
         return self.signals
 
     # ── Green Corridor state machine ─────────────────────────────────────────────
@@ -289,11 +294,11 @@ class SignalController:
         elif phase in ("active", "prepare") and dist > self.HOLD_BEHIND:
             # Ambulance has passed and is far enough — reset
             sig["phase"] = "reset"
-            sig["state"] = "red"
+            sig["state"] = "done"
 
         elif phase == "reset" and dist > 800:
             sig["phase"] = "normal"
-            sig["state"] = "red"
+            sig["state"] = "done"
 
     def _update_cross_signal(self, sig, route_phase):
         if route_phase == "active":

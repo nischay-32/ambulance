@@ -4,7 +4,7 @@ import requests
 
 class RoutingEngine:
     def __init__(self):
-        self.api_key = os.getenv("GOOGLE_MAPS_API_KEY", "AIzaSyBm52PmFkbHGAL2TrVJwbmeU_nx7J5OBYY")
+        self.api_key = os.getenv("GOOGLE_MAPS_API_KEY")
 
     def _build_waypoint(self, wp):
         if isinstance(wp, dict):
