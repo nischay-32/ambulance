@@ -6,6 +6,15 @@ let fleetMarkers = [];
 let incidentMarker = null;
 let ws;
 
+// ─── Environment-Aware Config ────────────────────────────────────────────────
+const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'http://localhost:8000'
+    : ''; // Relative for same-origin, or update this with your production backend URL
+
+const WS_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'ws://localhost:8000'
+    : `ws${window.location.protocol === 'https:' ? 's' : ''}://${window.location.host}`;
+
 // ─── Map-ready gate ───────────────────────────────────────────────────────────
 let _mapReadyResolve;
 const mapReady = new Promise(resolve => { _mapReadyResolve = resolve; });
@@ -190,7 +199,7 @@ async function fetchAndDrawPreview(latLng) {
     let data;
     try {
         const res = await fetch(
-            `http://localhost:8000/api/preview-route?incident_lat=${lat}&incident_lng=${lng}`
+            `${API_BASE}/api/preview-route?incident_lat=${lat}&incident_lng=${lng}`
         );
         data = await res.json();
     } catch (e) {
@@ -420,7 +429,7 @@ async function placeIncidentMarker(latLng) {
 async function findHospitals() {
     hospitalMarkers.forEach(m => m.map = null); hospitalMarkers = [];
     try {
-        const data = await (await fetch('http://localhost:8000/api/hospitals')).json();
+        const data = await (await fetch(`${API_BASE}/api/hospitals`)).json();
         for (const h of (data.hospitals || [])) createHospitalMarker(h);
     } catch (e) { console.error("Hospital fetch failed:", e); }
 }
@@ -455,7 +464,7 @@ async function ensureMarkerLib() {
 }
 
 function connectWebSocket() {
-    ws = new WebSocket("ws://localhost:8000/ws/simulation");
+    ws = new WebSocket(`${WS_BASE}/ws/simulation`);
 
     ws.onmessage = async function (event) {
         const data = JSON.parse(event.data);
@@ -680,7 +689,7 @@ document.getElementById("dispatch-btn").addEventListener("click", () => {
 // ─── Dynamic Config & Google Maps Loader ──────────────────────────────────────
 async function loadGoogleMaps() {
     try {
-        const response = await fetch('http://localhost:8000/api/config');
+        const response = await fetch(`${API_BASE}/api/config`);
         const config = await response.json();
         const apiKey = config.google_maps_api_key;
 
